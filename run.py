@@ -1,208 +1,149 @@
-import asyncio, html, io, logging, os, sqlite3, aiohttp, qrcode
-from aiohttp import web
-from aiogram import Bot, Dispatcher, F, Router
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ChatMemberStatus, ParseMode
-from aiogram.filters import Command, CommandStart
-from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton as Btn, InlineKeyboardMarkup as KB, Message
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-log = logging.getLogger("BrazilKeyBot")
+import asyncio, html, io, logging, os, aiohttp, qrcode
+from decimal import Decimal
+from dotenv import load_dotenv
+load_dotenv(encoding="utf-8")
 DOT = chr(46)
-TOK = (os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("TOKEN") or "").strip()
-ADM = int((os.getenv("ADMIN_TELEGRAM_ID") or os.getenv("OWNER_ID") or "1560345442").strip())
-PP_TOK = (os.getenv("PUSHINPAY_API_TOKEN") or "").strip()
-SUP_KEY = (os.getenv("PRODSELLER_API_KEY") or "").strip()
-SB_URL = (os.getenv("SUPABASE_URL") or "").strip()
-SB_KEY = (os.getenv("SUPABASE_SECRET_KEY") or os.getenv("SUPABASE_KEY") or "").strip()
-PP_BASE = DOT.join(["https://api", "pushinpay", "com", "br/api"])
-PP_SBX = DOT.join(["https://api-sandbox", "pushinpay", "com", "br/api"])
+os.environ["TOKEN"] = (os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("TOKEN") or "").strip()
+os.environ["OWNER_ID"] = (os.getenv("ADMIN_TELEGRAM_ID") or os.getenv("OWNER_ID") or "1560345442").strip()
+os.environ.setdefault("HELPER_ID", os.environ["OWNER_ID"])
+for k, v in [("PAY_CURRENCY", "BRL"), ("BOT_LOCALE", "en"), ("REDIS_ENABLED", "0"), ("POSTGRES_DB", "shop"), ("POSTGRES_USER", "shop"), ("POSTGRES_PASSWORD", "BrazilKey2026!"), ("SECRET_KEY", "brazil_key_secret_production_9988776655443322"), ("ADMIN_PASSWORD", "BrazilKeyAdmin2026!")]:
+    os.environ.setdefault(k, os.getenv(k, v))
+os.environ["ADMIN_HOST"], os.environ["ADMIN_PORT"] = "0.0.0.0", os.getenv("PORT", "10000")
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+import bot.database.main as db_m
+def _db_init(self):
+    u = os.getenv("DATABASE_URL", f"sqlite+aiosqlite:///orig_shop{DOT}db")
+    self._Database__engine = create_async_engine(u, echo=False)
+    self._Database__SessionLocal = async_sessionmaker(bind=self._Database__engine, class_=AsyncSession, autoflush=False, autocommit=False, expire_on_commit=False)
+db_m.Database.__init__ = _db_init
+if hasattr(db_m.SingletonMeta, "_instances"): db_m.SingletonMeta._instances.clear()
+
+import bot.database.models.main as mod_m, bot.database.methods.transactions as tx_m, bot.handlers.other as oth_m, bot.keyboards.inline as kb_m, bot.handlers.user.balance_and_payment as pay_m, bot.main as main_m
+from bot.database.methods.create import create_category, create_item, add_values_to_item
+from bot.database.methods.read import check_category_cached, get_item_info_cached
+from bot.database.methods.transactions import process_payment_with_referral
+from aiogram import F
+from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton as Btn, InlineKeyboardMarkup as KB
+from aiogram.fsm.context import FSMContext
+from bot.misc import EnvKeys
+from bot.i18n import localize
+from bot import start_bot
+
+PS_KEY, PP_TOK = (os.getenv("PRODSELLER_API_KEY") or "").strip(), (os.getenv("PUSHINPAY_API_TOKEN") or "").strip()
+PS_URL = DOT.join(["https://prodseller", "ru/api/v1"])
+PP_URLS = (DOT.join(["https://api", "pushinpay", "com", "br/api"]), DOT.join(["https://api-sandbox", "pushinpay", "com", "br/api"]))
 L_HTTP = DOT.join(["http://127", "0", "0", "1"])
-DB_FILE = DOT.join(["shop_data", "db"])
-ITEMS = [("cc_7d", "CapCut Pro 7 Dias", "Design & Video", 31.90), ("canva_edu", "Canva Pro Vitalicio", "Design & Video", 38.28), ("figma_pro", "Figma Pro Edu 2yrs", "Design & Video", 35.20), ("gpt_plus_1m", "ChatGPT Plus 1 Mes", "IA & Dev", 204.16), ("claude_pro", "Claude 3.5 Pro 1 Mes", "IA & Dev", 350.90), ("cursor_pro", "Cursor Pro AI 1 Mes", "IA & Dev", 255.20), ("yt_1m", "YouTube Premium 1 Mes", "Streaming", 57.42), ("spotify_1m", "Spotify Individual 1 Mes", "Streaming", 70.18), ("netflix_1m", "Netflix 4K 1 Mes", "Streaming", 165.88), ("xbox_ult_1m", "Xbox Game Pass 1 Mes", "Games & VPN", 242.44), ("discord_1m", "Discord Nitro 1 Mes", "Games & VPN", 133.98), ("win11_pro", "Windows 11 Pro Key", "Software", 102.08)]
+PS_MAP = {}
+SEED = [("cc_7d", "CapCut Pro 7 days", "Design & Video", 31.90), ("canva_edu", "Canva Edu Lifetime", "Design & Video", 38.28), ("adobe_1m", "Adobe Creative Cloud 1m", "Design & Video", 223.30), ("figma_pro", "Figma Pro 2yrs Edu", "Design & Video", 35.20), ("gpt_plus_1m", "ChatGPT Plus 1m", "AI & Dev Tools", 204.16), ("claude_pro", "Claude 3.5 Pro 1m", "AI & Dev Tools", 350.90), ("cursor_pro", "Cursor Pro AI 1m", "AI & Dev Tools", 255.20), ("copilot_1m", "GitHub Copilot 1m", "AI & Dev Tools", 140.36), ("yt_1m", "YouTube Premium 1m", "Streaming", 57.42), ("spotify_1m", "Spotify Individual 1m", "Streaming", 70.18), ("netflix_1m", "Netflix 4K 1m", "Streaming", 165.88), ("xbox_ult_1m", "Xbox Game Pass Ultimate 1m", "Gaming & VPN", 242.44), ("discord_1m", "Discord Nitro Full 1m", "Gaming & VPN", 133.98), ("win11_pro", "Windows 11 Pro Key", "Software & OS", 102.08)]
 
-def db():
-    c = sqlite3.connect(DB_FILE)
-    c.row_factory = sqlite3.Row
-    return c
+async def _sync_ps():
+    prods = [{"id": s, "name": n, "category": c, "price": p} for s, n, c, p in SEED]
+    if PS_KEY:
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=8)) as s:
+                async with s.get(f"{PS_URL}/products", headers={"X-API-Key": PS_KEY}) as r:
+                    if r.status == 200:
+                        d = await r.json(content_type=None)
+                        prods = (d.get("products") if isinstance(d, dict) else d) or prods
+        except Exception: pass
+    for p in prods:
+        pid, name, cat = str(p.get("id") or p.get("name")), str(p.get("name"))[:90], str(p.get("category") or "Subscriptions")[:90]
+        pr = Decimal(str(round(float(p.get("price") or 29.90), 2)))
+        PS_MAP[name] = pid
+        if not await check_category_cached(cat): await create_category(cat)
+        if not await get_item_info_cached(name):
+            await create_item(name, f"{name} — Official Subscription", pr, cat)
+            await add_values_to_item(name, f"KEY:{pid}", True)
 
-def init_db():
-    with db() as c:
-        c.execute("CREATE TABLE IF NOT EXISTS goods (sku TEXT PRIMARY KEY, name TEXT, cat TEXT, price REAL)")
-        c.execute("CREATE TABLE IF NOT EXISTS tickets (id INTEGER PRIMARY KEY AUTOINCREMENT, uid INTEGER, msg TEXT)")
-        c.execute("CREATE TABLE IF NOT EXISTS cfg (k TEXT PRIMARY KEY, v TEXT)")
-        for s, n, cat, p in ITEMS:
-            c.execute("INSERT OR IGNORE INTO goods VALUES (?, ?, ?, ?)", (s, n, cat, p))
+_orig_reg = mod_m.register_models
+async def _reg():
+    async with db_m.Database().engine.begin() as c: await c.run_sync(db_m.Database.BASE.metadata.create_all)
+    await _orig_reg()
+    await _sync_ps()
+mod_m.register_models = main_m.register_models = _reg
 
-def kb_home(uid: int) -> KB:
-    r = [[Btn(text="🛍️ Loja / Catálogo", callback_data="cats"), Btn(text="🔍 Buscar Produto", callback_data="cats")], [Btn(text="🛒 Meu Carrinho", callback_data="cart"), Btn(text="👤 Perfil & Saldo PIX", callback_data="prof")], [Btn(text="📦 Minhas Compras", callback_data="orders"), Btn(text="🤝 Afiliados", callback_data="refs")], [Btn(text="💬 Suporte Brazil Key", callback_data="sup"), Btn(text="❓ Regras & Suporte", callback_data="rules")]]
-    if uid == ADM:
-        r.append([Btn(text="🎛️ Painel Admin (Telegram-Shop)", callback_data="adm")])
-    return KB(inline_keyboard=r)
-
-def kb_back() -> KB:
-    return KB(inline_keyboard=[[Btn(text="⬅️ Menu Principal", callback_data="home")]])
-
-async def show(cb: CallbackQuery, txt: str, kb: KB):
-    try:
-        if cb.message.photo:
-            await cb.message.delete()
-            await cb.message.answer(txt, reply_markup=kb)
-        else:
-            await cb.message.edit_text(txt, reply_markup=kb)
-    except Exception:
-        await cb.message.answer(txt, reply_markup=kb)
-
-async def call_pp(cents: int) -> dict:
-    h = {"Authorization": f"Bearer {PP_TOK}", "Accept": "application/json", "Content-Type": "application/json"}
-    err = "Token invalido ou expirado"
-    try:
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as s:
-            for b in (PP_BASE, PP_SBX):
-                async with s.post(f"{b}/pix/cashIn", headers=h, json={"value": max(50, cents), "split_rules": []}) as r:
-                    d = await r.json(content_type=None)
-                    log.info(f"[PUSHINPAY-API] HTTP={r.status} | resp={d}")
-                    if r.status in (200, 201) and isinstance(d, dict) and d.get("qr_code"):
-                        return {"ok": True, "id": str(d.get("id")), "qr_code": d.get("qr_code")}
-                    if isinstance(d, dict) and d.get("error"):
-                        err = str(d.get("error"))
-    except Exception as e:
-        err = str(e)
-    return {"ok": False, "error": err}
-
-rt = Router()
-
-@rt.message(CommandStart())
-async def cmd_start(m: Message):
-    await m.answer(f"🇧🇷 <b>Olá, {html.escape(m.from_user.first_name or 'Cliente')}! Bem-vindo ao Brazil Key Bot.</b>\n\n⚡ <b>Entrega Automática Imediata via PIX:</b>\nEscolha abaixo a categoria desejada:", reply_markup=kb_home(m.from_user.id))
-
-@rt.callback_query(F.data == "home")
-async def cb_home(cb: CallbackQuery):
-    await show(cb, "🏪 <b>BRAZIL KEY STORE — Menu Oficial</b>\nEscolha abaixo:", kb_home(cb.from_user.id))
-    await cb.answer()
-
-@rt.callback_query(F.data == "cats")
-async def cb_cats(cb: CallbackQuery):
-    with db() as c:
-        cats = [r["cat"] for r in c.execute("SELECT DISTINCT cat FROM goods").fetchall()]
-    rows = [[Btn(text=f"📂 {cat}", callback_data=f"cat:{cat}")] for cat in cats] + [[Btn(text="⬅️ Menu Principal", callback_data="home")]]
-    await show(cb, "🛍️ <b>Categorias — Brazil Key Store:</b>", KB(inline_keyboard=rows))
-    await cb.answer()
-
-@rt.callback_query(F.data.startswith("cat:"))
-async def cb_cat(cb: CallbackQuery):
-    cat = cb.data.split(":", 1)[1]
-    with db() as c:
-        items = c.execute("SELECT * FROM goods WHERE cat=?", (cat,)).fetchall()
-    rows = [[Btn(text=f"{r['name']} — R$ {r['price']:.2f}", callback_data=f"it:{r['sku']}")] for r in items] + [[Btn(text="⬅️ Categorias", callback_data="cats")]]
-    await show(cb, f"📂 <b>{html.escape(cat)}:</b>", KB(inline_keyboard=rows))
-    await cb.answer()
-
-@rt.callback_query(F.data.startswith("it:"))
-async def cb_it(cb: CallbackQuery):
-    sku = cb.data.split(":", 1)[1]
-    with db() as c:
-        g = c.execute("SELECT * FROM goods WHERE sku=?", (sku,)).fetchone()
-    if g:
-        kb = KB(inline_keyboard=[[Btn(text=f"💠 Comprar com PIX (R$ {g['price']:.2f})", callback_data=f"pix:{g['sku']}")], [Btn(text="⬅️ Voltar", callback_data="cats"), Btn(text="🏠 Menu", callback_data="home")]])
-        await show(cb, f"🏷️ <b>{html.escape(g['name'])}</b>\n💰 <b>Preço:</b> R$ {g['price']:.2f}\n📦 <b>Estoque:</b> ✅ Disponível\n⚡ <i>Entrega automática via PIX.</i>", kb)
-    await cb.answer()
-
-@rt.callback_query(F.data.startswith("pix:"))
-async def cb_pix(cb: CallbackQuery):
-    sku = cb.data.split(":", 1)[1]
-    with db() as c:
-        g = c.execute("SELECT * FROM goods WHERE sku=?", (sku,)).fetchone()
-    await cb.answer("Gerando PIX...")
-    res = await call_pp(int(round(float(g["price"]) * 100)))
-    if not res.get("ok"):
-        await show(cb, f"⚠️ <b>Erro na API PushinPay:</b> <code>{html.escape(str(res.get('error')))}</code>", kb_back())
-        return
-    buf = io.BytesIO()
-    qrcode.make(res["qr_code"]).save(buf, format="PNG")
-    await cb.message.answer_photo(photo=BufferedInputFile(buf.getvalue(), filename="pix_qr"), caption=f"💠 <b>PIX Oficial — Brazil Key</b>\n🛍️ {g['name']} — R$ {g['price']:.2f}\n<code>{res['qr_code']}</code>", reply_markup=kb_back())
-
-@rt.callback_query(F.data.in_({"cart", "prof", "orders", "refs", "sup", "rules", "adm"}))
-async def cb_others(cb: CallbackQuery):
-    d = cb.data
-    if d == "adm" and cb.from_user.id == ADM:
-        with db() as c:
-            skus = "\n".join([f"• <code>{r['sku']}</code>: R$ {r['price']:.2f}" for r in c.execute("SELECT * FROM goods").fetchall()])
-        await show(cb, f"🎛️ <b>Painel Admin — Brazil Key</b>\n• Preço: <code>/setprice sku valor</code>\n• Canal: <code>/setchannel @canal</code>\n• Suporte: <code>/responder id msg</code>\n\n{skus}", kb_back())
-    else:
-        await show(cb, "🏪 <b>Brazil Key Store — Oficial</b>\n• Suporte: envie <code>/suporte sua mensagem</code>\n• Catálogo 100% automático.", kb_back())
-    await cb.answer()
-
-@rt.message(Command("setprice", "preco"))
-async def cmd_price(m: Message):
-    p = (m.text or "").split()
-    if m.from_user.id == ADM and len(p) >= 3:
-        with db() as c:
-            c.execute("UPDATE goods SET price=? WHERE LOWER(sku)=LOWER(?)", (float(p[2].replace(",", ".")), p[1]))
-        await m.answer(f"✅ Preço de <code>{html.escape(p[1])}</code> atualizado para R$ {float(p[2].replace(',', '.')):.2f}!")
-
-@rt.message(Command("setchannel"))
-async def cmd_setchan(m: Message):
-    p = (m.text or "").split()
-    if m.from_user.id == ADM and len(p) >= 2:
-        with db() as c:
-            c.execute("INSERT OR REPLACE INTO cfg VALUES ('cid', ?)", ("" if p[1].lower() == "off" else p[1],))
-        await m.answer(f"✅ Canal obrigatório configurado: <code>{html.escape(p[1])}</code>")
-
-@rt.message(Command("suporte"))
-async def cmd_sup(m: Message):
-    txt = (m.text or "").partition(" ")[2].strip()
-    if txt:
-        with db() as c:
-            tid = c.execute("INSERT INTO tickets (uid, msg) VALUES (?, ?)", (m.from_user.id, txt)).lastrowid
-        await m.bot.send_message(ADM, f"🆘 <b>Chamado #{tid} — Brazil Key</b>\n👤 @{m.from_user.username} [ID: <code>{m.from_user.id}</code>]\n💬 {html.escape(txt)}\nUse: <code>/responder {tid} texto</code>")
-        await m.answer(f"✉️ Chamado #{tid} enviado ao suporte Brazil Key!")
-
-@rt.message(Command("responder"))
-async def cmd_resp(m: Message):
-    p = (m.text or "").split(maxsplit=2)
-    if m.from_user.id == ADM and len(p) >= 3:
-        with db() as c:
-            r = c.execute("SELECT uid FROM tickets WHERE id=?", (int(p[1].lstrip("#")),)).fetchone()
-        if r:
-            await m.bot.send_message(r["uid"], f"📩 <b>Suporte Brazil Key (#{p[1]}):</b>\n{html.escape(p[2])}")
-            await m.answer("✅ Respondido!")
-
-async def keepalive_13m(port: int):
-    log.info("[KEEPALIVE-13M-SERVER] Ativo somente no servidor a cada 13 minutos (780s)")
-    await asyncio.sleep(5)
-    n = 0
-    pub = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
-    while True:
-        n += 1
-        code = 0
+_orig_buy = tx_m.buy_item_transaction
+async def _buy(uid: int, name: str, promo: str = None):
+    ok, msg, data = await _orig_buy(uid, name, promo)
+    if ok and isinstance(data, dict) and PS_KEY:
         try:
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as s:
-                async with s.get(f"{pub}/health?keepalive=13m" if pub else f"{L_HTTP}:{port}/health?keepalive=13m") as r:
-                    code = r.status
-        except Exception:
-            pass
-        log.info(f"[KEEPALIVE-13M-SERVER] Pulso #{n} concluido no servidor | HTTP={code}")
+                async with s.post(f"{PS_URL}/orders", headers={"X-API-Key": PS_KEY}, json={"productId": PS_MAP.get(name, name), "quantity": 1}) as r:
+                    if r.status in (200, 201):
+                        d = await r.json(content_type=None)
+                        if isinstance(d, dict) and d.get("deliveredKey"): data["value"] = str(d["deliveredKey"])
+        except Exception: pass
+    return ok, msg, data
+tx_m.buy_item_transaction = pay_m.buy_item_transaction = _buy
+
+_orig_any = oth_m._any_payment_method_enabled
+oth_m._any_payment_method_enabled = pay_m._any_payment_method_enabled = lambda: bool(PP_TOK) or _orig_any()
+_orig_choice = kb_m.get_payment_choice
+def _choice() -> KB:
+    rows = list(_orig_choice().inline_keyboard)
+    rows.insert(max(0, len(rows) - 1), [Btn(text="💠 PIX (PushinPay)", callback_data="pay_pushinpay")])
+    return KB(inline_keyboard=rows)
+kb_m.get_payment_choice = pay_m.get_payment_choice = _choice
+
+@pay_m.router.callback_query(F.data == "pay_pushinpay")
+async def _on_pp(call: CallbackQuery, state: FSMContext):
+    amt = float((await state.get_data()).get("amount") or 10)
+    await call.answer("Gerando PIX PushinPay...")
+    h = {"Authorization": f"Bearer {PP_TOK}", "Accept": "application/json", "Content-Type": "application/json"}
+    err, qr, tid = "Token invalido ou expirado", "", ""
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as s:
+            for b in PP_URLS:
+                async with s.post(f"{b}/pix/cashIn", headers=h, json={"value": max(50, int(round(amt * 100))), "split_rules": []}) as r:
+                    d = await r.json(content_type=None)
+                    if r.status in (200, 201) and isinstance(d, dict) and d.get("qr_code"):
+                        qr, tid = str(d["qr_code"]), str(d.get("id"))
+                        break
+                    if isinstance(d, dict) and d.get("error"): err = str(d["error"])
+    except Exception as e: err = str(e)
+    if not qr:
+        await call.message.edit_text(f"⚠️ <b>PushinPay PIX:</b> <code>{html.escape(err)}</code>", reply_markup=_choice())
+        return
+    buf = io.BytesIO()
+    qrcode.make(qr).save(buf, format="PNG")
+    kb = KB(inline_keyboard=[[Btn(text=localize("btn.check_payment"), callback_data=f"chk_pp:{tid}:{amt:.2f}")], [Btn(text=localize("btn.back"), callback_data="profile")]])
+    await call.message.answer_photo(photo=BufferedInputFile(buf.getvalue(), filename="pix_qr"), caption=f"💠 <b>PIX PushinPay — {amt:.2f} {EnvKeys.PAY_CURRENCY}</b>\n\n<code>{html.escape(qr)}</code>", reply_markup=kb)
+
+@pay_m.router.callback_query(F.data.startswith("chk_pp:"))
+async def _chk_pp(call: CallbackQuery, state: FSMContext):
+    _, tid, amt_s = call.data.split(":", 2)
+    paid = False
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=8)) as s:
+            for b in PP_URLS:
+                async with s.get(f"{b}/transactions/{tid}", headers={"Authorization": f"Bearer {PP_TOK}", "Accept": "application/json"}) as r:
+                    if r.status == 200 and str((await r.json(content_type=None)).get("status", "")).lower() in ("paid", "approved", "completed"): paid = True
+    except Exception: pass
+    if not paid:
+        await call.answer("⏳ Pagamento ainda não confirmado na PushinPay.", show_alert=True)
+        return
+    ok, msg = await process_payment_with_referral(user_id=call.from_user.id, amount=Decimal(amt_s), provider="pushinpay", external_id=tid, referral_percent=int(EnvKeys.REFERRAL_PERCENT or 0))
+    if ok:
+        await state.clear()
+        await call.message.answer(f"✅ <b>PIX Confirmado! +{amt_s} {EnvKeys.PAY_CURRENCY} creditados no seu saldo.</b>")
+    else: await call.answer(msg, show_alert=True)
+
+async def _ka():
+    port, pub = int(os.getenv("PORT", "10000")), os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
+    logging.info("[KEEPALIVE-13M-SERVER] Ativo somente no servidor a cada 13 minutos (780s)")
+    await asyncio.sleep(8)
+    while True:
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as s:
+                async with s.get(f"{pub}/health" if pub else f"{L_HTTP}:{port}/health") as r:
+                    logging.info(f"[KEEPALIVE-13M-SERVER] Pulso concluido no servidor | HTTP={r.status}")
+        except Exception: pass
         await asyncio.sleep(780)
 
-async def start_server():
-    init_db()
-    port = int(os.getenv("PORT", "10000"))
-    app = web.Application()
-    app.router.add_get("/", lambda req: web.json_response({"status": "healthy", "bot": "@BrazilKeyStoreBot"}))
-    app.router.add_get("/health", lambda req: web.json_response({"status": "healthy", "keepalive": "13m"}))
-    runner = web.AppRunner(app)
-    await runner.setup()
-    await web.TCPSite(runner, "0.0.0.0", port).start()
-    asyncio.create_task(keepalive_13m(port))
-    await call_pp(51)
-    bot = Bot(token=TOK, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    me = await bot.get_me()
-    await bot.delete_webhook(drop_pending_updates=True)
-    log.info(f"Brazil Key Bot online em @{me.username} (ID: {me.id})")
-    dp = Dispatcher()
-    dp.include_router(rt)
-    await dp.start_polling(bot)
+async def _main():
+    asyncio.create_task(_ka())
+    await start_bot()
 
 if __name__ == "__main__":
-    asyncio.run(start_server())
+    asyncio.run(_main())
