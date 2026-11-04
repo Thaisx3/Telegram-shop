@@ -56,4 +56,4 @@ gosu botuser alembic upgrade head
 echo "Migrations complete. Starting bot..."
 
 # exec gives PID 1 to the Python process — SIGTERM propagates correctly for graceful shutdown
-exec gosu botuser python run.py
+exec gosu botuser python addons.py
