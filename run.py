@@ -78,7 +78,7 @@ import bot.main as main_m
 from bot import start_bot
 _pall()
 _orm = mod_m.register_models
-async def _create_all(): eng = db_m.Database().engine; c = await eng.begin().__aenter__(); await c.run_sync(db_m.Database.BASE.metadata.create_all); await c.__aexit__(None, None, None)
+async def _create_all(): eng = db_m.Database()._Database__engine; ctx = eng.begin(); c = await ctx.__aenter__(); await c.run_sync(Role.metadata.create_all); await ctx.__aexit__(None, None, None)
 async def _prm(): await _safe(_create_all()); await _orm(); _pall(); await sync_ps()
 mod_m.register_models = main_m.register_models = _prm
 class BKFSM(StatesGroup): oap = State(); oas = State(); pp = State(); ps = State(); pr = State(); mk = State()
