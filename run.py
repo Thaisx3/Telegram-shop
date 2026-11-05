@@ -25,7 +25,7 @@ os.environ["ADMIN_HOST"], os.environ["ADMIN_PORT"] = DOT.join(["0", "0", "0", "0
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 import bot.database.main as db_m
-def _db_init(self): u = os.getenv("DATABASE_URL", f"sqlite+aiosqlite{SEP}/brazilkey_shop{DOT}db"); kw = {} if u.startswith("sqlite") else {"pool_pre_ping": True, "connect_args": {"statement_cache_size": 0}}; eng = create_async_engine(u, echo=False, **kw); sm = async_sessionmaker(bind=eng, class_=AsyncSession, autoflush=False, autocommit=False, expire_on_commit=False); self.engine = self._Database__engine = eng; self.sessionmaker = self._Database__sessionmaker = self._Database__SessionLocal = sm
+def _db_init(self): u = os.getenv("DATABASE_URL", f"sqlite+aiosqlite{SEP}/brazilkey_shop{DOT}db"); kw = {} if u.startswith("sqlite") else {"pool_pre_ping": True, "connect_args": {"statement_cache_size": 0}}; eng = create_async_engine(u, echo=False, **kw); sm = async_sessionmaker(bind=eng, class_=AsyncSession, autoflush=False, autocommit=False, expire_on_commit=False); self._Database__engine = eng; self._Database__sessionmaker = self._Database__SessionLocal = sm
 db_m.Database.__init__ = _db_init
 _CLR = getattr(db_m.SingletonMeta, "_instances", {}).clear() if hasattr(db_m.SingletonMeta, "_instances") else None
 import bot.i18n.strings as i18s, bot.database.models.main as mod_m, bot.database.methods.read as dbr, bot.database.methods.transactions as tx_m, bot.keyboards.inline as kb_m, bot.handlers.user.balance_and_payment as pay_m
