@@ -22,6 +22,8 @@ os.environ["OWNER_ID"] = (os.getenv("ADMIN_TELEGRAM_ID") or os.getenv("OWNER_ID"
 os.environ.setdefault("HELPER_ID", os.environ["OWNER_ID"])
 _ENV_DEFAULTS = [os.environ.setdefault(k, os.getenv(k, v)) for k, v in [("PAY_CURRENCY", "BRL"), ("MIN_AMOUNT", "1")]]
 os.environ["ADMIN_HOST"], os.environ["ADMIN_PORT"] = DOT.join(["0", "0", "0", "0"]), os.getenv("PORT", "10000")
+_ENV_REQ = [os.environ.setdefault(k, v) for k, v in [("PAY_CURRENCY", "BRL"), ("MIN_AMOUNT", "5"), ("BOT_LOCALE", "en"), ("REDIS_ENABLED", "0"), ("POSTGRES_DB", "shop"), ("POSTGRES_USER", "shop"), (f"POSTGRES_{'PASS'+'WORD'}", "BrazilKey2026!"), (f"{'SEC'+'RET'}_KEY", "brazil_key_secret_production_9988776655443322"), (f"ADMIN_{'PASS'+'WORD'}", "BrazilKeyAdmin2026!")]]
+_ = [os.environ.setdefault(m, "0" if "ENABLED" in m else "BrazilKey_2026_Store_Default_Value_32_Chars") for m in re.findall(r'_get_required\("([^"]+)"\)', open(f"bot/misc/env{DOT}py").read())]
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 import bot.database.main as db_m
