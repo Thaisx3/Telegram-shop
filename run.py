@@ -57,8 +57,9 @@ PT0.update({f"profile{DOT}id": "🆔 <b>ID</b> — <code>{id}</code>", f"profile
 
 def glang(): return cget("lang", "pt")
 def slang(l): l = "en" if l == "en" else "pt"; cset("lang", l); [i18s.TRANSLATIONS[lk].update(PT0 if l == "pt" else EN0) for lk in ("en", "ru") if lk in i18s.TRANSLATIONS]
-slang(glang())
-async def _safe(coro, default=None): r = await asyncio.gather(coro, return_exceptions=True); return default if isinstance(r[0], Exception) else r[0]
+slang(glang()) 
+async def _aw(c): return await c
+async def _safe(coro, default=None): r = await asyncio.gather(_aw(coro), return_exceptions=True); return default if isinstance(r[0], Exception) else r[0]
 async def _http_raw(method, url, headers=None, json_body=None, params=None): s = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=12)); r = await s.request(method, url, headers=headers, json=json_body, params=params); d = await r.json(content_type=None); st = r.status; await s.close(); return st, d
 async def http_req(method, url, headers=None, json_body=None, params=None): return await _safe(_http_raw(method, url, headers, json_body, params), (0, {}))
 _http_req = http_req
