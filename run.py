@@ -211,9 +211,9 @@ _pall()
 _ostart = usr_m.start
 async def _pstart(message: Message, state: FSMContext, *a, **kw):
     await _ostart(message, state, *a, **kw)
-    await _safe(message.bot.set_my_commands([BotCommand(command="start", description="⛩️ Menu Principal / Abrir Loja"), BotCommand(command="admin", description="🎛️ Painel Admin")]))
+    await _safe(message.bot.set_my_commands([BotCommand(command="start", description="⛩️ Menu Principal / Abrir Loja")]))
     await _safe(message.bot.set_chat_menu_button(chat_id=message.chat.id, menu_button=MenuButtonCommands()))
-    sent = await _safe(message.answer("📌 <b>Menu Rápido Fixado — Brazil Key Store</b>" if glang() == "pt" else "📌 <b>Pinned Quick Menu — Brazil Key Store</b>", reply_markup=_pmm(role=1023, helper=EnvKeys.HELPER_ID)))
+    sent = await _safe(message.answer("📌 <b>Menu Rápido Fixado — Brazil Key Store</b>" if glang() == "pt" else "📌 <b>Pinned Quick Menu — Brazil Key Store</b>", reply_markup=_pmm(role=1, helper=EnvKeys.HELPER_ID)))
     if sent and getattr(sent, "message_id", None):
         await _safe(message.bot.unpin_all_chat_messages(chat_id=message.chat.id))
         await _safe(message.bot.pin_chat_message(chat_id=message.chat.id, message_id=sent.message_id, disable_notification=True))
