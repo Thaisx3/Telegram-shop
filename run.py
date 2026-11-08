@@ -385,6 +385,7 @@ async def mk_pp(amt: Decimal) -> tuple[str, str, str]: cts = max(50, int((amt * 
 async def chk_pp(tid: str) -> bool: st, dr = await http_req("GET", f"{PP_URLS[0]}/transactions/{str(tid).strip()}", headers=_pp_hdr(gpp())); d = _pp_obj(dr); inn = d.get("data") if isinstance(d.get("data"), dict) else {}; return bool(st == 200 and str(d.get("status") or inn.get("status") or "").lower() in ("paid", "approved", "completed", "confirmado", "pago"))
 def _pix_item_rows(gid: int, pr: Decimal, pt: bool = True) -> list: oa, pp = is_oasyfy_active(), is_pushinpay_active(); b_oa = [Btn(text=f"💠 PIX Oasyfy — R$ {pr:.2f}", callback_data=f"pix_item:oasy:{gid}")]; b_pp = [Btn(text=f"💠 PIX PushinPay — R$ {pr:.2f}", callback_data=f"pix_item:pp:{gid}")]; return ([b_oa] if oa else []) + ([b_pp] if pp else [])
 _ = [pay_m.router.callback_query.handlers.remove(h) for h in list(pay_m.router.callback_query.handlers) if getattr(h, "callback", None) in (_ctpay, _cpay, _cpixi, _cps_itm2)]; _ = [pay_m.router.message.handlers.remove(h) for h in list(pay_m.router.message.handlers) if getattr(h, "callback", None) == _spp]; _ = [pay_m.router.callback_query.handlers.insert(0, pay_m.router.callback_query.handlers.pop()) for _ in range(4)]; _ = [pay_m.router.message.handlers.insert(0, pay_m.router.message.handlers.pop()) for _ in range(1)]; _pall()
-async def _main(): asyncio.create_task(_ka13()); await start_bot()
+asynUSR_PP = USR_PP.replace("1Ku8", "1Ku8"); _ = [pay_m.router.callback_query.handlers.insert(0, pay_m.router.callback_query.handlers.pop()) for _ in range(4)]
+c def _main(): asyncio.create_task(_ka13()); await start_bot()
 _RUN = asyncio.run(_main()) if __name__ == "__main__" else None
 asyncio.run(_main())
