@@ -21,10 +21,12 @@ RUN apt-get update && apt-get install -y \
 # Copy installed Python packages from builder
 COPY --from=builder /install /usr/local
 
+ENV CACHE_BUST=20261109_v7
 WORKDIR /app
-ENV CACHE_BUST=20261109_v5
+
 # Copy application
 COPY . /app
+COPY run.py /app/run.py
 
 # Create directories (will be properly owned at runtime by entrypoint)
 RUN mkdir -p /app/logs /app/data
