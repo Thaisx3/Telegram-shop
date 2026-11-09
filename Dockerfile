@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /install /usr/local
 
 WORKDIR /app
-
+ENV CACHE_BUST=20261109_v5
 # Copy application
 COPY . /app
 
