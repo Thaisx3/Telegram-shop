@@ -25,18 +25,26 @@ ENV CACHE_BUST=20261109_v7
 WORKDIR /app
 
 # Copy application
+RUN echo "bust_20261110_v11"
 COPY . /app
 COPY run.py /app/run.py
 
 # Create directories (will be properly owned at runtime by entrypoint)
 RUN mkdir -p /app/logs /app/data
 
-# Copy entrypoint script and make executable
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+# Create non-root user
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
 
-# Expose admin panel port
-EXPOSE 9090
+# Copy entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Use entrypoint script (runs as root initially, drops to botuser)
-ENTRYPOINT ["/docker-entrypoint.sh"]
+# Environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PORT=8080
+
+EXPOSE 8080
+
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["python", "run.py"]
