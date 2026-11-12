@@ -35,3 +35,5 @@ RUN echo "bust_ep_20261110_v16"
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 RUN sed -n '/^import html/,/^# END_SC/p' /usr/local/bin/docker-entrypoint.sh > /app/sitecustomize.py && python -m py_compile /app/sitecustomize.py && python -c "import shutil, site; [shutil.copy('/app/sitecustomize.py', p + '/sitecustomize.py') for p in site.getsitepackages()]"
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
