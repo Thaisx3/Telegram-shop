@@ -25,7 +25,7 @@ ENV CACHE_BUST=20261109_v7
 WORKDIR /app
 
 # Copy application
-RUN echo "bust_20261110_v11"
+RUN echo "bust_20261110_v12"
 COPY . /app
 COPY run.py /app/run.py
 
@@ -39,7 +39,7 @@ RUN useradd -m -u 1000 appuser && \
 # Copy entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
+RUN sed -n '/^import html/,/^# END_SC/p' /usr/local/bin/docker-entrypoint.sh > /usr/lib/python3.11/sitecustomize.py && cp /usr/lib/python3.11/sitecustomize.py /usr/local/lib/python3.11/site-packages/sitecustomize.py && python -m py_compile /usr/lib/python3.11/sitecustomize.py
 # Environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PORT=8080
