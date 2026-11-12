@@ -25,15 +25,16 @@ ENV CACHE_BUST=20261109_v7
 WORKDIR /app
 
 # Copy application
-RUN echo "bust_20261110_v16"
+RUN echo "bust_20261110_v20"
 COPY . /app
 COPY run.py /app/run.py
 
 # Create directories (will be properly owned at runtime by entrypoint)
 RUN mkdir -p /app/logs /app/data
-RUN echo "bust_ep_20261110_v16"
+RUN echo "bust_ep_20261110_v20"
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-RUN sed -n '/^import html/,/^# END_SC/p' /usr/local/bin/docker-entrypoint.sh > /app/sitecustomize.py && python -m py_compile /app/sitecustomize.py && python -c "import shutil, site; [shutil.copy('/app/sitecustomize.py', p + '/sitecustomize.py') for p in site.getsitepackages()]"
+RUN sed -n '/^import html/,/^# END_SC/p' /usr/local/bin/docker-entrypoint.sh > /app/sitecustomize.py && python -m py_compile /app/sitecustomize.py && python -c "import sitecustomize; print('sitecustomize syntax OK')"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
+ENTRYPOINT ["docker-entrypoint.sh"]
