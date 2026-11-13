@@ -25,19 +25,10 @@ ENV CACHE_BUST=20261109_v7
 WORKDIR /app
 
 # Copy application
-RUN echo "bust_20261110_v23"
+RUN echo "bust_20261110_v26"
 COPY . /app
 COPY run.py /app/run.py
 
 # Create directories (will be properly owned at runtime by entrypoint)
 RUN mkdir -p /app/logs /app/data
-RUN echo "bust_ep_20261110_v23"
-
-# Copy entrypoint script and set permissions
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
-# Expose healthcheck port if needed (bot is purely polling / async worker)
-EXPOSE 8080
-
-ENTRYPOINT ["docker-entrypoint.sh"]
+RUN echo "bust_ep_20261110_v26"
