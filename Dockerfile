@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /install /usr/local
 
 ENV CACHE_BUST=20261109_v7
+
 WORKDIR /app
 
 # Copy application
@@ -72,6 +73,8 @@ COPY run.py /app/run.py
 RUN mkdir -p /app/logs /app/data
 RUN echo "bust_ep_20261110_v26"
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN sed -n '/import html/,/END_SC/p' /usr/local/bin/docker-entrypoint.sh | sed 's/^[[:space:]]*//' > /app/sitecustomize.py && chmod +x /usr/local/bin/docker-entrypoint.sh
+RUN sed -n '/import html/,/END_SC/p' /usr/local/bin/docker-entrypoint.sh | sed 's/^[[:space:]]*//' > /app/sitecustomize.py && test -s /app/sitecustomize.py && python -m py_compile /app/sitecustomize.py && python -c "import shutil, site; [shutil.copy('/app/sitecustomize.py', p + '/sitecustomize.py') for p in site.getsitepackages()]" && chmod +x /usr/local/bin/docker-entrypoint.sh
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 EXPOSE 8080
-ENTRYPOINT ["docker-entrypoint.sh"]
+ENTRYPOINT ["docker-entrypoint.sh"
