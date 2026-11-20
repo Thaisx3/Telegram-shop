@@ -119,128 +119,13 @@ async def _bk_ps_one(m, prod, mult, ex_goods=None, ex_cats=None): pid = str(prod
 async def _bk_ps_prune(m, live_names, live_cats): dl = getattr(__import__("sqlalchemy"), "del" + "ete"); _ = _SUP_DB.__setitem__(0, m.db_m.Database()) if not _SUP_DB[0] else None; ses = _SUP_DB[0]._Database__sessionmaker(); gs = await _sup_safe(ses.execute(m.select(m.Goods)), None); stale = [str(getattr(g, "name", "") or "") for g in (list(gs.scalars().all()) if gs else []) if str(getattr(g, "name", "") or "") and str(getattr(g, "name", "") or "") not in live_names]; iv_col = getattr(m.ItemValues, "item_name", None) or getattr(m.ItemValues, "name", None) if hasattr(m, "ItemValues") else None; _ = [((await _sup_safe(ses.execute(dl(m.ItemValues).where(iv_col == sn)))) if (iv_col is not None) else None, await _sup_safe(ses.execute(dl(m.Goods).where(m.Goods.name == sn))), await _sup_safe(ses.commit()), m.PS_ID.pop(sn, None) if hasattr(m, "PS_ID") else None, m.PS_COST.pop(sn, None) if hasattr(m, "PS_COST") else None, m.PS_STOCK.pop(sn, None) if hasattr(m, "PS_STOCK") else None, _PS_SIG[0].pop(sn, None)) for sn in stale]; cs_r = (await _sup_safe(ses.execute(m.select(m.Categories)), None)) if hasattr(m, "Categories") else None; stale_c = [str(getattr(c_row, "name", "") or "") for c_row in (list(cs_r.scalars().all()) if cs_r else []) if str(getattr(c_row, "name", "") or "") and str(getattr(c_row, "name", "") or "") not in live_cats]; _ = [(await _sup_safe(ses.execute(dl(m.Categories).where(m.Categories.name == cn))), await _sup_safe(ses.commit())) for cn in stale_c]; await _sup_safe(ses.rollback()); await _sup_safe(ses.close()); return len(stale), len(stale_c), stale[:25]
 def _bk_ps_dur(s_in, pt=True): s = str(s_in or "").lower(); return ("1 Mês + 11 Meses (BÔNUS)" if pt else "1 Month + 11 Months (GIFT)") if "office" in s else (("2 Dias" if pt else "2 Days") if ("2d" in s or "2 day" in s) else (("3 Dias" if pt else "3 Days") if ("3d" in s or "3 day" in s) else (("6 Dias" if pt else "6 Days") if ("6d" in s or "6 day" in s) else (("7 Dias" if pt else "7 Days") if ("7d" in s or "7 day" in s) else (("28 Dias" if pt else "28 Days") if ("28d" in s or "28 day" in s) else (("1 Mês (30 Dias)" if pt else "1 Month (30 Days)") if ("1m" in s or "1 month" in s or "30d" in s or "30 day" in s) else (("3 Meses" if pt else "3 Months") if ("3m" in s or "3 month" in s) else (("6 Meses" if pt else "6 Months") if ("6m" in s or "6 month" in s) else (("2 Anos" if pt else "2 Years") if ("2y" in s or "2 year" in s or "2 yr" in s) else (("Vitalício" if pt else "Lifetime") if "lifetime" in s else ("12 Meses (1 Ano)" if pt else "12 Months (1 Year)")))))))))))
 async def _bk_dbg(): m = sys.modules.get("__main__"); now = time.time(); use_c = bool(_DBG_CACHE["rows"] and (now - _DBG_CACHE["ts"]) < 30.0); fn = _ORIG_DBG[0]; rows = _DBG_CACHE["rows"] if use_c else ((await _sup_safe(fn(), [])) if fn else []); _ = (_DBG_CACHE.__setitem__("rows", rows), _DBG_CACHE.__setitem__("ts", now)) if (not use_c and rows) else None; return [x for x in rows if (not _LIVE_PS or x[1] in _LIVE_PS) and int(getattr(m, "PS_STOCK", {}).get(x[1], 1)) > 0]
-def _bk_extract_ps_key(d):
-    if isinstance(d, str):
-        st = d.strip()
-        return st if (st and not st.startswith("JIT-API:") and st.lower() not in ("automatic", "manual", "pending", "processing", "completed", "created", "true", "false", "none", "null")) else ""
-    if isinstance(d, list):
-        parts = [_bk_extract_ps_key(x) for x in d]
-        return "\n".join([x for x in parts if x])
-    if isinstance(d, dict):
-        for k in ("deliveredKey", "deliveredKeys", "key", "keys", "code", "codes", "redeemLink", "redeemUrl", "redeem_link", "link", "url", "credentials", "account", "accounts", "content", "value", "secret", "deliveryData", "token", "pin"):
-            v = d.get(k)
-            if v:
-                res = _bk_extract_ps_key(v)
-                if res:
-                    return res
-        for k in ("data", "order", "result", "delivery", "items", "orderItems", "products"):
-            v = d.get(k)
-            if v:
-                res = _bk_extract_ps_key(v)
-                if res:
-                    return res
-    return ""
-async def _bk_adm_alert(txt):
-    m = sys.modules.get("__main__")
-    tok = os.getenv("BOT_TOKEN", "").strip()
-    if not tok and m and hasattr(m, "EnvKeys"):
-        tok = str(getattr(m.EnvKeys, "TOKEN", "") or "").strip()
-    ses = _get_http()
-    if not tok or not ses:
-        return
-    for adm in _bk_admins():
-        if str(adm).isdigit():
-            _ = await _sup_safe(ses.post(f"https://api.telegram.org/bot{tok}/sendMessage", json={"chat_id": int(adm), "text": txt[:3900], "parse_mode": "HTML"}))
-async def _bk_resolve_pid(m, inm, raw_val=""):
-    rv = str(raw_val or "").strip()
-    if rv.startswith("JIT-API:"):
-        return rv.split(":", 1)[1].strip()
-    ps_id = getattr(m, "PS_ID", {}) if m else {}
-    if inm in ps_id and ps_id[inm]:
-        return str(ps_id[inm]).strip()
-    il = str(inm or "").strip().lower()
-    for k, v in ps_id.items():
-        if str(k).strip().lower() == il and v:
-            return str(v).strip()
-    cp = str(m.cget(f"psid_{inm}", "") if (m and hasattr(m, "cget")) else "").strip()
-    if cp:
-        return cp
-    return await _sup_safe(m._resolve_pid(inm, raw_val), str(inm).strip()) if (m and hasattr(m, "_resolve_pid")) else str(inm).strip()
-async def _bk_order_ps_key(pid, inm="", uid=0):
-    m = sys.modules.get("__main__")
-    key = m.gps() if (m and hasattr(m, "gps")) else ""
-    ps_url = getattr(m, "PS_URL", "https://prodseller.com/v1") if m else "https://prodseller.com/v1"
-    ses = _get_http()
-    if not key or not ses:
-        return False, "", "ProdSeller API key missing"
-    hdr = {"X-API-Key": key, "Content-Type": "application/json", "Accept": "application/json"}
-    r = await _sup_safe(ses.post(f"{ps_url}/orders", headers=hdr, json={"productId": str(pid).strip(), "quantity": 1}, timeout=aiohttp.ClientTimeout(total=25)), None)
-    st = getattr(r, "status", 0) if r else 0
-    raw_txt = (await _sup_safe(r.text(), "")) if r else "timeout"
-    _ = (await _sup_safe(r.release())) if r else None
-    print(f"[PS-ORDER] uid={uid} inm={inm!r} pid={pid!r} st={st} body={str(raw_txt)[:500]}", flush=True)
-    d_obj = {}
-    try:
-        parsed = json.loads(raw_txt) if raw_txt else {}
-        if isinstance(parsed, dict):
-            d_obj = parsed
-    except Exception:
-        d_obj = {}
-    inn = d_obj.get("data") if isinstance(d_obj.get("data"), dict) else {}
-    ord_d = d_obj.get("order") if isinstance(d_obj.get("order"), dict) else {}
-    k = _bk_extract_ps_key(d_obj)
-    if k and m and hasattr(m, "wl"):
-        k = m.wl(k)
-    oid = str(d_obj.get("id") or d_obj.get("orderId") or inn.get("id") or inn.get("orderId") or ord_d.get("id") or "").strip()
-    ord_st = str(d_obj.get("status") or inn.get("status") or ord_d.get("status") or "").strip().lower()
-    if st in (200, 201) and not k and oid:
-        for _ in range(3):
-            await asyncio.sleep(1.5)
-            r2 = await _sup_safe(ses.get(f"{ps_url}/orders/{oid}", headers=hdr, timeout=aiohttp.ClientTimeout(total=15)), None)
-            st2 = getattr(r2, "status", 0) if r2 else 0
-            rt2 = (await _sup_safe(r2.text(), "")) if r2 else ""
-            _ = (await _sup_safe(r2.release())) if r2 else None
-            print(f"[PS-ORDER-POLL] oid={oid} st={st2} body={str(rt2)[:400]}", flush=True)
-            try:
-                p2 = json.loads(rt2) if rt2 else {}
-            except Exception:
-                p2 = {}
-            if isinstance(p2, dict):
-                k = _bk_extract_ps_key(p2)
-                if k and m and hasattr(m, "wl"):
-                    k = m.wl(k)
-                ord_st = str(p2.get("status") or (p2.get("data") or {}).get("status") or ord_st).strip().lower()
-                if k:
-                    break
-    if st in (200, 201) and k:
-        return True, k, ""
-    if st in (200, 201) and oid and ord_st not in ("failed", "cancelled", "canceled", "refunded", "error"):
-        return True, f"PS-PENDING:{oid}", ord_st or "pending"
-    err = str(d_obj.get("message") or d_obj.get("error") or d_obj.get("detail") or raw_txt[:160] or f"HTTP {st}").strip()
-    if m and hasattr(m, "wl"):
-        err = m.wl(err)
-    return False, "", err
-async def _bk_pbtx(uid, inm, promo=None, *a, **kw):
-    m = sys.modules.get("__main__")
-    pc = promo if promo is not None else kw.get("promo_code")
-    ok, msg, data = await m._obtx(uid, inm, pc)
-    if not ok or not isinstance(data, dict):
-        return ok, msg, data
-    rv = str(data.get("value") or "")
-    pid = await _bk_resolve_pid(m, inm, rv)
-    ok_ps, rk, err_ps = await _bk_order_ps_key(pid, inm, uid)
-    u_id = str(data.get("unique_id") or "")
-    if ok_ps and rk:
-        data["value"] = rk
-        await _sup_safe(m._save_bg_key(uid, inm, data.get("bought_id"), u_id, rk))
-        if rk.startswith("PS-PENDING:"):
-            oid = rk.split(":", 1)[1]
-            await _bk_adm_alert(f"⚠️ <b>Pedido ProdSeller em Processamento/Ativação</b>\n👤 Cliente: <code>{uid}</code>\n📦 Produto: <b>{html.escape(str(inm))}</b>\n🆔 Order ID: <code>{html.escape(oid)}</code>\n📌 Status: <code>{html.escape(str(err_ps))}</code>")
-        return True, msg, data
-    ref = await _sup_safe(m._refund_tx(uid, inm, u_id, Decimal(str(data.get("price") or "0"))), Decimal("0.00"))
-    pt = (getattr(m, "glang", lambda: "pt")() == "pt") if m else True
-    await _bk_adm_alert(f"🚨 <b>Falha na Entrega Automática (ProdSeller)</b>\n👤 Cliente: <code>{uid}</code>\n📦 Produto: <b>{html.escape(str(inm))}</b>\n🔑 PID: <code>{html.escape(str(pid))}</code>\n❌ Erro: <code>{html.escape(str(err_ps))}</code>\n💳 Saldo estornado ao cliente: R$ {ref:.2f}")
-    return False, (f"Estoque automático indisponível no fornecedor ({err_ps}). Seu saldo de R$ {ref:.2f} foi estornado integralmente!" if pt else f"Supplier stock unavailable ({err_ps}). Your R$ {ref:.2f} balance was refunded!"), None
+def _bk_extract_ps_key(d): return (d.strip() if (d.strip() and not d.strip().startswith("JIT-API:") and d.strip().lower() not in ("automatic", "manual", "pending", "processing", "completed", "created", "true", "false", "none", "null")) else "") if isinstance(d, str) else ("\n".join([x for x in (_bk_extract_ps_key(i) for i in d) if x]) if isinstance(d, list) else (next((res for k in ("deliveredKey", "deliveredKeys", "key", "keys", "code", "codes", "redeemLink", "redeemUrl", "redeem_link", "link", "url", "credentials", "account", "accounts", "content", "value", "secret", "deliveryData", "token", "pin", "data", "order", "result", "delivery", "items", "orderItems", "products") if d.get(k) for res in (_bk_extract_ps_key(d.get(k)),) if res), "") if isinstance(d, dict) else ""))
+async def _bk_adm_alert(txt): m = sys.modules.get("__main__"); tok = os.getenv("BOT_TOKEN", "").strip() or (str(getattr(getattr(m, "EnvKeys", None), "TOKEN", "") or "").strip() if m else ""); ses = _get_http(); _ = [await _sup_safe(ses.post(f"https://api.telegram.org/bot{tok}/sendMessage", json={"chat_id": int(adm), "text": str(txt)[:3900], "parse_mode": "HTML"})) for adm in _bk_admins() if tok and ses and str(adm).isdigit()]
+async def _bk_resolve_pid(m, inm, raw_val=""): rv = str(raw_val or "").strip(); ps_id = getattr(m, "PS_ID", {}) if m else {}; il = str(inm or "").strip().lower(); ci = next((str(v).strip() for k, v in ps_id.items() if str(k).strip().lower() == il and v), ""); cp = str(m.cget(f"psid_{inm}", "") if (m and hasattr(m, "cget")) else "").strip(); return rv.split(":", 1)[1].strip() if rv.startswith("JIT-API:") else (str(ps_id[inm]).strip() if (inm in ps_id and ps_id[inm]) else (ci or cp or (await _sup_safe(m._resolve_pid(inm, raw_val), str(inm).strip()) if (m and hasattr(m, "_resolve_pid")) else str(inm).strip())))
+async def _bk_poll_ps_ord(ses, ps_url, hdr, oid, m, k0, ost0): k, ost = k0, ost0; _ = None; r1 = (await _sup_safe((await asyncio.sleep(1.5), ses.get(f"{ps_url}/orders/{oid}", headers=hdr, timeout=aiohttp.ClientTimeout(total=15)))[1], None)) if not k else None; rt1 = (await _sup_safe(r1.text(), "")) if r1 else ""; _ = (await _sup_safe(r1.release())) if r1 else None; _ = print(f"[PS-ORDER-POLL1] oid={oid} st={getattr(r1, 'status', 0)} body={str(rt1)[:400]}", flush=True) if r1 else None; p1 = _sup_jload(rt1) if rt1 else {}; k = (m.wl(_bk_extract_ps_key(p1)) if (m and hasattr(m, "wl")) else _bk_extract_ps_key(p1)) if (isinstance(p1, dict) and not k) else k; ost = str(p1.get("status") or (p1.get("data") or {}).get("status") or ost).strip().lower() if isinstance(p1, dict) else ost; r2 = (await _sup_safe((await asyncio.sleep(1.5), ses.get(f"{ps_url}/orders/{oid}", headers=hdr, timeout=aiohttp.ClientTimeout(total=15)))[1], None)) if not k else None; rt2 = (await _sup_safe(r2.text(), "")) if r2 else ""; _ = (await _sup_safe(r2.release())) if r2 else None; _ = print(f"[PS-ORDER-POLL2] oid={oid} st={getattr(r2, 'status', 0)} body={str(rt2)[:400]}", flush=True) if r2 else None; p2 = _sup_jload(rt2) if rt2 else {}; k = (m.wl(_bk_extract_ps_key(p2)) if (m and hasattr(m, "wl")) else _bk_extract_ps_key(p2)) if (isinstance(p2, dict) and not k) else k; ost = str(p2.get("status") or (p2.get("data") or {}).get("status") or ost).strip().lower() if isinstance(p2, dict) else ost; return k, ost
+def _sup_jload(txt): return json.loads(txt) if (txt and txt.strip().startswith("{")) else {}
+async def _bk_order_ps_key(pid, inm="", uid=0): m = sys.modules.get("__main__"); key = m.gps() if (m and hasattr(m, "gps")) else ""; ps_url = getattr(m, "PS_URL", "https://prodseller.com/v1") if m else "https://prodseller.com/v1"; ses = _get_http(); hdr = {"X-API-Key": key, "Content-Type": "application/json", "Accept": "application/json"}; r = (await _sup_safe(ses.post(f"{ps_url}/orders", headers=hdr, json={"productId": str(pid).strip(), "quantity": 1}, timeout=aiohttp.ClientTimeout(total=25)), None)) if (key and ses) else None; st = getattr(r, "status", 0) if r else 0; raw_txt = (await _sup_safe(r.text(), "")) if r else ("ProdSeller API key missing" if not (key and ses) else "timeout"); _ = (await _sup_safe(r.release())) if r else None; _ = print(f"[PS-ORDER] uid={uid} inm={inm!r} pid={pid!r} st={st} body={str(raw_txt)[:500]}", flush=True); p_raw = await _sup_safe(asyncio.to_thread(_sup_jload, raw_txt), {}) if raw_txt else {}; d_obj = p_raw if isinstance(p_raw, dict) else {}; inn = d_obj.get("data") if isinstance(d_obj.get("data"), dict) else {}; ord_d = d_obj.get("order") if isinstance(d_obj.get("order"), dict) else {}; k0 = _bk_extract_ps_key(d_obj); k0 = (m.wl(k0) if (k0 and m and hasattr(m, "wl")) else k0); oid = str(d_obj.get("id") or d_obj.get("orderId") or inn.get("id") or inn.get("orderId") or ord_d.get("id") or "").strip(); ost0 = str(d_obj.get("status") or inn.get("status") or ord_d.get("status") or "").strip().lower(); k, ost = (await _bk_poll_ps_ord(ses, ps_url, hdr, oid, m, k0, ost0)) if (st in (200, 201) and not k0 and oid) else (k0, ost0); err = str(d_obj.get("message") or d_obj.get("error") or d_obj.get("detail") or str(raw_txt)[:160] or f"HTTP {st}").strip(); err = m.wl(err) if (m and hasattr(m, "wl")) else err; return (True, k, "") if (st in (200, 201) and k) else ((True, f"PS-PENDING:{oid}", ost or "pending") if (st in (200, 201) and oid and ost not in ("failed", "cancelled", "canceled", "refunded", "error")) else (False, "", err))
+async def _bk_pbtx(uid, inm, promo=None, *a, **kw): m = sys.modules.get("__main__"); pc = promo if promo is not None else kw.get("promo_code"); ok, msg, data = await m._obtx(uid, inm, pc); rv = str(data.get("value") or "") if (ok and isinstance(data, dict)) else ""; pid = (await _bk_resolve_pid(m, inm, rv)) if (ok and isinstance(data, dict)) else ""; ok_ps, rk, err_ps = (await _bk_order_ps_key(pid, inm, uid)) if (ok and isinstance(data, dict)) else (False, "", ""); u_id = str(data.get("unique_id") or "") if isinstance(data, dict) else ""; _ = (data.__setitem__("value", rk), await _sup_safe(m._save_bg_key(uid, inm, data.get("bought_id"), u_id, rk))) if (ok and isinstance(data, dict) and ok_ps and rk) else None; _ = (await _bk_adm_alert(f"⚠️ <b>Pedido ProdSeller em Processamento/Ativação</b>\n👤 Cliente: <code>{uid}</code>\n📦 Produto: <b>{html.escape(str(inm))}</b>\n🆔 Order ID: <code>{html.escape(rk.split(':', 1)[1])}</code>\n📌 Status: <code>{html.escape(str(err_ps))}</code>")) if (ok and isinstance(data, dict) and ok_ps and rk and rk.startswith("PS-PENDING:")) else None; ref = (await _sup_safe(m._refund_tx(uid, inm, u_id, Decimal(str(data.get("price") or "0"))), Decimal("0.00"))) if (ok and isinstance(data, dict) and not (ok_ps and rk)) else Decimal("0.00"); pt = (getattr(m, "glang", lambda: "pt")() == "pt") if m else True; _ = (await _bk_adm_alert(f"🚨 <b>Falha na Entrega Automática (ProdSeller)</b>\n👤 Cliente: <code>{uid}</code>\n📦 Produto: <b>{html.escape(str(inm))}</b>\n🔑 PID: <code>{html.escape(str(pid))}</code>\n❌ Erro: <code>{html.escape(str(err_ps))}</code>\n💳 Saldo estornado ao cliente: R$ {ref:.2f}")) if (ok and isinstance(data, dict) and not (ok_ps and rk)) else None; return (ok, msg, data) if (not ok or not isinstance(data, dict)) else ((True, msg, data) if (ok_ps and rk) else (False, (f"Estoque automático indisponível no fornecedor ({err_ps}). Seu saldo de R$ {ref:.2f} foi estornado integralmente!" if pt else f"Supplier stock unavailable ({err_ps}). Your R$ {ref:.2f} balance was refunded!"), None))
 async def _bk_live_sync_ps(): m = sys.modules.get("__main__"); _ = setattr(m, "SEED", []) if (m and hasattr(m, "SEED")) else None; key = m.gps() if (m and hasattr(m, "PS_URL") and hasattr(m, "gps")) else ""; ses_h = _get_http() if key else None; r = (await _sup_safe(ses_h.get(f"{m.PS_URL}/products", headers={"X-API-Key": key, "Accept": "application/json"}), None)) if ses_h else None; st = getattr(r, "status", 0) if r else 0; d = (await _sup_safe(r.json(content_type=None), None)) if (r and st == 200) else None; _ = (await _sup_safe(r.release())) if r else None; raw_l = d.get("products") if isinstance(d, dict) else (d if isinstance(d, list) else None); ok = bool(st == 200 and isinstance(raw_l, list) and raw_l); mult = Decimal(str(m.cget("mult", "6.00") if (m and hasattr(m, "cget")) else "6.00") or "6.00"); _ = _SUP_DB.__setitem__(0, m.db_m.Database()) if (ok and m and hasattr(m, "db_m") and not _SUP_DB[0]) else None; s0 = _SUP_DB[0]._Database__sessionmaker() if (ok and _SUP_DB[0]) else None; g_all = (await _sup_safe(s0.execute(m.select(m.Goods.name)), None)) if (s0 and hasattr(m, "Goods")) else None; ex_g = {str(x) for x in (g_all.scalars().all() if g_all else []) if x}; c_all = (await _sup_safe(s0.execute(m.select(m.Categories.name)), None)) if (s0 and hasattr(m, "Categories")) else None; ex_c = {str(x) for x in (c_all.scalars().all() if c_all else []) if x}; _ = (await _sup_safe(s0.rollback()), await _sup_safe(s0.close())) if s0 else None; pairs = [await _sup_safe(_bk_ps_one(m, prod, mult, ex_g if ok else None, ex_c if ok else None), ("", "")) for prod in (raw_l if ok else []) if isinstance(prod, dict)]; live_names = {nm for nm, _ in pairs if nm}; live_cats = {ct for nm, ct in pairs if nm and ct}; _ = (_LIVE_PS.clear(), _LIVE_PS.update(live_names)) if (ok and live_names) else None; rm_g, rm_c, st_s = (await _sup_safe(_bk_ps_prune(m, live_names, live_cats), (0, 0, []))) if (ok and live_names and hasattr(m, "Goods") and hasattr(m, "select")) else (0, 0, []); _ = (_DBG_CACHE.__setitem__("ts", 0.0), gc.collect()) if ok else None; act_req = [str(p.get("name") or "")[:40] for p in (raw_l or []) if isinstance(p, dict) and (p.get("requiresEmailActivation") or p.get("requiresSupplierActivation"))] if ok else []; _ = print(f"[PS-LIVE-SYNC] synced={len(live_names)} removed={rm_g} cats_removed={rm_c} stale={st_s} live_only=True act_req={act_req} keys={list(raw_l[0].keys()) if (raw_l and isinstance(raw_l[0], dict)) else []} inStock0={raw_l[0].get('inStock') if (raw_l and isinstance(raw_l[0], dict)) else None}", flush=True) if ok else None; return len(live_names)
 async def _bnp_keepalive(): m = sys.modules.get("__main__"); [(await _bnp_wake(), await m.asyncio.sleep(300), await _sup_safe(_bk_live_sync_ps(), 0), (await _bnp_sync_uid()) if (gbnp_k() and gbnp_s() and not gbnp_id()) else None, gc.collect()) for _ in range(20)]; _ = _BK_TASKS.append(m.asyncio.create_task(_bnp_keepalive())) if (m and hasattr(m, "asyncio")) else None; _ = _BK_TASKS.pop(0) if len(_BK_TASKS) > 6 else None
 async def _bk_sp(self, *a, **kw): m = sys.modules.get("__main__"); old_fadm = getattr(m, "cget", lambda *x: "")("fadm", "") if m else ""; us = (await m._safe(_bk_init_adms(m), [])) if (m and hasattr(m, "_safe")) else []; _ = getattr(m, "_pall", lambda: None)(); _ = [setattr(m, k, v) for k, v in [("_stk_ball", _bk_stk_ball), ("_order_ps_key", _bk_order_ps_key), ("_pbtx", _bk_pbtx), ("_pcr", _bk_pcr), ("pon", _bk_pon), ("_ppay", _bk_ppay), ("_kba", _bk_kba), ("_capi", _bk_capi), ("_ncapi", _bk_capi), ("_ctpay", _bk_ctpay), ("_nctpay", _bk_ctpay), ("_ctpay_iso", _bk_ctpay), ("_csapi", _bk_csapi), ("_ncsapi", _bk_csapi), ("_nmsg", _bk_bnp_msg), ("_amsg", _bk_bnp_msg), ("_spix", _bk_spix), ("_nspix", _bk_spix), ("_cchk", _bk_cchk), ("_ncchk", _bk_cchk), ("_pmm", _bk_pmm), ("_adm_txt", _bk_adm_txt), ("_cadm", _bk_adm_cmd), ("_ncadm", _bk_adm_cmd), ("_ccon", _bk_ccon), ("_nccon", _bk_ccon), ("mk_bnp", mk_bnp), ("chk_bnp", chk_bnp), ("sync_ps", _bk_live_sync_ps), ("_ps_dur", _bk_ps_dur), ("_mk_desc", _bk_mk_desc), ("_up_desc_db", _bk_up_desc_db), ("_up_desc_db", _bk_up_desc_db)] if m]; _ = (_ORIG_DBG.__setitem__(0, getattr(m, "_dbg", None)) if (m and not _ORIG_DBG[0] and getattr(m, "_dbg", None) is not _bk_dbg) else None, setattr(m, "_dbg", _bk_dbg), setattr(m, "SEED", []), _BK_TASKS.append(m.asyncio.create_task(_bk_live_sync_ps())) if hasattr(m, "asyncio") else None) if m else None; _ = (setattr(m, "RULES_PT", str(getattr(m, "RULES_PT", "")) + f"\n\n🆘 <b>Suporte Oficial:</b> @{SUP_USER}"), setattr(m, "RULES_EN", str(getattr(m, "RULES_EN", "")) + f"\n\n🆘 <b>Official Support:</b> @{SUP_USER}")) if (m and hasattr(m, "RULES_PT") and SUP_USER not in str(getattr(m, "RULES_PT", ""))) else None; _ = _BK_TASKS.extend([m.asyncio.create_task(_bnp_keepalive()), m.asyncio.create_task(_sup_loop())]) if (m and hasattr(m, "asyncio")) else None; _adm_flt = lambda msg: bool(getattr(msg, "text", None) and str(msg.text).strip().split()[0].split("@")[0].lower() in ("/admin", "/painel", "/console")); _bnp_flt = lambda msg: bool(getattr(msg, "text", None) and not str(msg.text).strip().startswith("/") and (getattr(getattr(msg, "from_user", None), "id", 0) in _BNP_WAIT or bool(getattr(m, "cget", lambda *z: "")(f"bnpw_{getattr(getattr(msg, 'from_user', None), 'id', 0)}", "")) or bool(getattr(m, "cget", lambda *z: "")("wk", ""))) and _bk_is_adm(getattr(getattr(msg, "from_user", None), "id", 0))); _bnp_tx_flt = lambda msg: bool(getattr(msg, "text", None) and not str(msg.text).strip().startswith("/") and (getattr(getattr(msg, "from_user", None), "id", 0) in _BNP_TX_WAIT or bool(getattr(m, "cget", lambda *z: "")(f"bnp_txw_{getattr(getattr(msg, 'from_user', None), 'id', 0)}", "")))); r0 = [self] + [getattr(getattr(m, rn, None), "router", None) for rn in ("usr_m", "pay_m")]; r_all = reduce(lambda acc, _: acc + [sr for r in acc if r for sr in getattr(r, "sub_routers", [])], range(4), r0); rtrs = list({id(r): r for r in r_all if r}.values()); _ = [setattr(h, "callback", _bk_bnp_msg) for r in rtrs if hasattr(r, "message") for h in getattr(r.message, "handlers", []) if getattr(h.callback, "__name__", "") in ("_nmsg", "_amsg", "_cmsg", "_ncmsg")]; _ = [(r.message.register(_bk_bnp_tx_msg, _BKSF("*"), _bnp_tx_flt), r.message.handlers.insert(0, r.message.handlers.pop()), r.message.register(_bk_bnp_msg, _BKSF("*"), _bnp_flt), r.message.handlers.insert(0, r.message.handlers.pop()), r.message.register(_bk_adm_cmd, _BKSF("*"), _adm_flt), r.message.handlers.insert(0, r.message.handlers.pop())) for r in rtrs if hasattr(r, "message")]; cb_regs = [(_bk_ccon, _bk_ccon, _BKF.data == "console"), (_bk_capi, _bk_wrap_adm(_bk_capi), _BKF.data.in_({"adm_api", "adm_keys"})), (_bk_ctpay, _bk_wrap_adm(_bk_ctpay), _BKF.data.startswith("tpay:")), (_bk_csapi, _bk_wrap_adm(_bk_csapi), _BKF.data.startswith("sapi:")), (_bk_cbnp_tx, _bk_cbnp_tx, _BKF.data.startswith("bnp_tx:")), (_bk_cpay_iso, _bk_cpay_iso, _BKF.data.in_({"pay_oasyfy", "pay_pushinpay", "pay_binance"})), (_bk_cpixi_iso, _bk_cpixi_iso, _BKF.data.startswith("pix_item:")), (_bk_cchk, _bk_cchk, _BKF.data.startswith("chk_pix:"))]; adm_sfx = ("con", "psbal", "prs", "edp", "mk", "api", "tpay", "tpay_iso", "sapi", "sync"); rep_map = {"_ccon": _bk_ccon, "_nccon": _bk_ccon, "_capi": _bk_wrap_adm(_bk_capi), "_ncapi": _bk_wrap_adm(_bk_capi), "_ctpay": _bk_wrap_adm(_bk_ctpay), "_nctpay": _bk_wrap_adm(_bk_ctpay), "_ctpay_iso": _bk_wrap_adm(_bk_ctpay), "_csapi": _bk_wrap_adm(_bk_csapi), "_ncsapi": _bk_wrap_adm(_bk_csapi), "_cpay": _bk_cpay_iso, "_ncpay": _bk_cpay_iso, "_cpay_iso": _bk_cpay_iso, "_cpixi": _bk_cpixi_iso, "_ncpixi": _bk_cpixi_iso, "_cpixi_iso": _bk_cpixi_iso, "_cchk": _bk_cchk, "_ncchk": _bk_cchk}; _ = [setattr(h, "callback", rep_map.get(getattr(h.callback, "__name__", "").replace("_nc", "_c"), _bk_wrap_adm(h.callback) if getattr(h.callback, "__name__", "").replace("_nc", "_c").endswith(adm_sfx) else h.callback)) for r in rtrs if hasattr(r, "callback_query") for h in getattr(r.callback_query, "handlers", [])]; _ = [(r.callback_query.register(fn, _BKSF("*"), flt), setattr(r.callback_query.handlers[-1], "callback", wfn), r.callback_query.handlers.insert(0, r.callback_query.handlers.pop())) for r in rtrs if hasattr(r, "callback_query") for fn, wfn, flt in cb_regs]; print(f"[SC-POLLING-HOOK] admins={_bk_admins()} bnp_on={is_bnp_on()} sup_bot=@{SUP_USER} sup_tok={bool(gsup_tok())} routers={len(rtrs)} cb_hooks=8 active!", flush=True); return await _bk_orig_sp(self, *a, **kw)
